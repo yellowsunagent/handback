@@ -1,20 +1,28 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import React from 'react';
+import { NavigationContainer, DarkTheme } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+
+import type { RootStackParamList } from './src/types/nav';
+import { ToolsListScreen } from './src/screens/ToolsListScreen';
+import { AddToolScreen } from './src/screens/AddToolScreen';
+import { ToolDetailScreen } from './src/screens/ToolDetailScreen';
+import { StartLoanScreen } from './src/screens/StartLoanScreen';
+import { ScanLoanScreen } from './src/screens/ScanLoanScreen';
+import { SettingsScreen } from './src/screens/SettingsScreen';
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function App() {
   return (
-    <View style={styles.container}>
-      <Text>Open up App.tsx to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <NavigationContainer theme={DarkTheme}>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="ToolsList" component={ToolsListScreen} />
+        <Stack.Screen name="AddTool" component={AddToolScreen} />
+        <Stack.Screen name="ToolDetail" component={ToolDetailScreen} />
+        <Stack.Screen name="StartLoan" component={StartLoanScreen} />
+        <Stack.Screen name="ScanLoan" component={ScanLoanScreen} />
+        <Stack.Screen name="Settings" component={SettingsScreen} />
+      </Stack.Navigator>
+    </NavigationContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
