@@ -1,6 +1,7 @@
 import React from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import QRCode from 'react-native-qrcode-svg';
 import type { RootStackParamList } from '../types/nav';
 import { loadState } from '../storage/store';
 import { newId } from '../lib/id';
@@ -57,12 +58,12 @@ export function StartLoanScreen({ route }: Props) {
 
       <View style={styles.qrBox}>
         {qr ? (
-          <Text style={{ color: 'rgba(255,255,255,0.8)', fontWeight: '800' }}>QR ready</Text>
+          <View style={styles.qrInner}>
+            <QRCode value={qr} size={240} backgroundColor="#0b0d12" color="#e5e7eb" />
+          </View>
         ) : (
           <Text style={{ color: 'rgba(255,255,255,0.7)' }}>Generating…</Text>
         )}
-        {/* Expo doesn’t include a QR renderer by default.
-            Next step: add a QR render component so the owner can show a scannable QR. */}
       </View>
 
       <Text style={styles.payloadLabel}>QR payload (temporary)</Text>
@@ -100,6 +101,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: 18,
     padding: 14,
+  },
+  qrInner: {
+    padding: 10,
+    borderRadius: 16,
+    backgroundColor: '#0b0d12',
   },
   payloadLabel: { marginTop: 14, color: 'rgba(255,255,255,0.65)', fontSize: 12 },
   payloadBox: {
