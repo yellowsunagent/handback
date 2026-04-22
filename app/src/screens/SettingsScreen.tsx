@@ -1,8 +1,9 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../types/nav';
-import { loadState, setMyName } from '../storage/store';
+import { addTool, loadState, setMyName } from '../storage/store';
+import { newId } from '../lib/id';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
@@ -27,6 +28,31 @@ export function SettingsScreen({ navigation }: Props) {
     }
   }
 
+  async function onSeedDemo() {
+    const confirmed = await new Promise<boolean>((resolve) => {
+      Alert.alert('Seed demo tools?', 'Adds a handful of tools to make demos fast.', [
+        { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+        { text: 'Add demo tools', style: 'default', onPress: () => resolve(true) },
+      ]);
+    });
+    if (!confirmed) return;
+
+    const state = await loadState();
+    const ownerName = state.myName || 'Me';
+
+    const names = ['Drill', 'Socket set', 'Hammer', 'Ladder', 'Leaf blower'];
+    for (const n of names) {
+      await addTool({
+        id: await newId('tool'),
+        name: n,
+        ownerName,
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    Alert.alert('Done', 'Demo tools added.');
+  }
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Settings</Text>
@@ -44,9 +70,11 @@ export function SettingsScreen({ navigation }: Props) {
         <Text style={styles.btnText}>{saving ? 'Saving…' : 'Save'}</Text>
       </Pressable>
 
-      <Text style={styles.note}>
-        Handback is local-first. This name is stored only on this device.
-      </Text>
+      <Pressable style={[styles.btn, styles.secondary]} onPress={() => void onSeedDemo()}>
+        <Text style={styles.secondaryText}>Seed demo tools</Text>
+      </Pressable>
+
+      <Text style={styles.note}>Handback is local-first. This name is stored only on this device.</Text>
     </View>
   );
 }
@@ -71,5 +99,7 @@ const styles = StyleSheet.create({
   },
   btnDisabled: { opacity: 0.6 },
   btnText: { color: '#05140d', fontSize: 15, fontWeight: '800' },
+  secondary: { backgroundColor: 'rgba(255,255,255,0.08)' },
+  secondaryText: { color: 'rgba(255,255,255,0.9)', fontSize: 15, fontWeight: '800' },
   note: { marginTop: 14, color: 'rgba(255,255,255,0.65)', fontSize: 12, lineHeight: 18 },
 });
