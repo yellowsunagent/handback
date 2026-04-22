@@ -28,6 +28,9 @@ export function ToolsListScreen({ navigation }: Props) {
       <View style={styles.header}>
         <Text style={styles.title}>Handback</Text>
         <View style={styles.headerButtons}>
+          <Pressable style={styles.headerBtn} onPress={() => navigation.navigate('Loans')}>
+            <Text style={styles.headerBtnText}>Loans</Text>
+          </Pressable>
           <Pressable style={styles.headerBtn} onPress={() => navigation.navigate('Settings')}>
             <Text style={styles.headerBtnText}>Settings</Text>
           </Pressable>
