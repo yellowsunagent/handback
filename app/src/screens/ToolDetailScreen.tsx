@@ -71,7 +71,17 @@ export function ToolDetailScreen({ route, navigation }: Props) {
           <Text style={styles.loanTitle}>Current loan</Text>
           <Text style={styles.loanLine}>Borrower: {loan.borrowerName}</Text>
           <Text style={styles.loanLine}>Started: {new Date(loan.startedAt).toLocaleString()}</Text>
-          <Text style={styles.loanLine}>Due: {loan.dueAt ? new Date(loan.dueAt).toLocaleDateString() : '—'}</Text>
+          {(() => {
+            const dueAt = loan.dueAt;
+            if (!dueAt) return <Text style={styles.loanLine}>Due: —</Text>;
+            const due = new Date(dueAt).getTime();
+            const days = (due - Date.now()) / (24 * 60 * 60 * 1000);
+            const badge = days < 0 ? 'Overdue' : days <= 2 ? 'Due soon' : new Date(dueAt).toLocaleDateString();
+            const tone = days < 0 ? styles.dangerText : days <= 2 ? styles.warnText : undefined;
+            return (
+              <Text style={[styles.loanLine, tone]}>Due: {badge}</Text>
+            );
+          })()}
         </View>
       ) : null}
 
@@ -125,5 +135,7 @@ const styles = StyleSheet.create({
   primary: { backgroundColor: '#6ee7b7' },
   primaryText: { color: '#05140d' },
   danger: { backgroundColor: '#ef4444' },
+  warnText: { color: '#fbbf24' },
+  dangerText: { color: '#fca5a5' },
   note: { marginTop: 8, color: 'rgba(255,255,255,0.6)', fontSize: 12, lineHeight: 18 },
 });

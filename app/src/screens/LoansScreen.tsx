@@ -62,6 +62,16 @@ export function LoansScreen({ navigation }: Props) {
   );
 }
 
+function dueBadge(dueAt?: string): { label: string; tone: 'muted' | 'warn' | 'danger' } {
+  if (!dueAt) return { label: '—', tone: 'muted' };
+  const due = new Date(dueAt).getTime();
+  const now = Date.now();
+  const days = (due - now) / (24 * 60 * 60 * 1000);
+  if (days < 0) return { label: 'Overdue', tone: 'danger' };
+  if (days <= 2) return { label: 'Due soon', tone: 'warn' };
+  return { label: new Date(dueAt).toLocaleDateString(), tone: 'muted' };
+}
+
 function Section({
   title,
   rows,
@@ -95,9 +105,20 @@ function Section({
                 <Text style={styles.rowSub}>
                   Owner: {item.loan.ownerName} · Borrower: {item.loan.borrowerName}
                 </Text>
-                <Text style={styles.rowSub}>
-                  Due: {item.loan.dueAt ? new Date(item.loan.dueAt).toLocaleDateString() : '—'}
-                </Text>
+                {(() => {
+                  const b = dueBadge(item.loan.dueAt);
+                  return (
+                    <Text
+                      style={[
+                        styles.rowSub,
+                        b.tone === 'warn' && styles.warn,
+                        b.tone === 'danger' && styles.danger,
+                      ]}
+                    >
+                      Due: {b.label}
+                    </Text>
+                  );
+                })()}
               </View>
               <Text style={styles.chev}>›</Text>
             </Pressable>
@@ -138,5 +159,7 @@ const styles = StyleSheet.create({
   },
   rowTitle: { color: '#fff', fontSize: 16, fontWeight: '800', marginBottom: 4 },
   rowSub: { color: 'rgba(255,255,255,0.7)', fontSize: 12, marginBottom: 3 },
+  warn: { color: '#fbbf24' },
+  danger: { color: '#fca5a5' },
   chev: { color: 'rgba(255,255,255,0.6)', fontSize: 22, paddingLeft: 10 },
 });

@@ -31,6 +31,10 @@ export async function saveState(state: AppState): Promise<void> {
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
+export async function resetState(): Promise<void> {
+  await AsyncStorage.removeItem(STORAGE_KEY);
+}
+
 export async function updateState(updater: (prev: AppState) => AppState): Promise<AppState> {
   const prev = await loadState();
   const next = updater(prev);

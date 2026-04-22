@@ -2,7 +2,7 @@ import React from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../types/nav';
-import { addTool, loadState, setMyName } from '../storage/store';
+import { addTool, loadState, resetState, setMyName } from '../storage/store';
 import { newId } from '../lib/id';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
@@ -53,6 +53,19 @@ export function SettingsScreen({ navigation }: Props) {
     Alert.alert('Done', 'Demo tools added.');
   }
 
+  async function onReset() {
+    const confirmed = await new Promise<boolean>((resolve) => {
+      Alert.alert('Reset local data?', 'This clears all tools and loans on this device.', [
+        { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+        { text: 'Reset', style: 'destructive', onPress: () => resolve(true) },
+      ]);
+    });
+    if (!confirmed) return;
+
+    await resetState();
+    Alert.alert('Reset complete', 'Local data cleared.');
+  }
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Settings</Text>
@@ -72,6 +85,10 @@ export function SettingsScreen({ navigation }: Props) {
 
       <Pressable style={[styles.btn, styles.secondary]} onPress={() => void onSeedDemo()}>
         <Text style={styles.secondaryText}>Seed demo tools</Text>
+      </Pressable>
+
+      <Pressable style={[styles.btn, styles.danger]} onPress={() => void onReset()}>
+        <Text style={styles.dangerText}>Reset local data</Text>
       </Pressable>
 
       <Text style={styles.note}>Handback is local-first. This name is stored only on this device.</Text>
@@ -101,5 +118,7 @@ const styles = StyleSheet.create({
   btnText: { color: '#05140d', fontSize: 15, fontWeight: '800' },
   secondary: { backgroundColor: 'rgba(255,255,255,0.08)' },
   secondaryText: { color: 'rgba(255,255,255,0.9)', fontSize: 15, fontWeight: '800' },
+  danger: { backgroundColor: '#ef4444' },
+  dangerText: { color: '#fff', fontSize: 15, fontWeight: '900' },
   note: { marginTop: 14, color: 'rgba(255,255,255,0.65)', fontSize: 12, lineHeight: 18 },
 });
