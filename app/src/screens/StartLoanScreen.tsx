@@ -33,6 +33,7 @@ export function StartLoanScreen({ route }: Props) {
       kind: 'loan',
       loanId,
       toolId: tool.id,
+      toolName: tool.name,
       ownerName: state.myName || tool.ownerName || 'Me',
       dueAt,
     };

@@ -3,7 +3,7 @@ import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { BarCodeScanner } from 'expo-barcode-scanner';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../types/nav';
-import { addLoan, loadState, updateTool } from '../storage/store';
+import { addLoan, addTool, loadState, updateTool } from '../storage/store';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ScanLoan'>;
 
@@ -12,6 +12,7 @@ type LoanPayload = {
   kind: 'loan';
   loanId: string;
   toolId: string;
+  toolName?: string;
   ownerName: string;
   dueAt?: string;
 };
@@ -30,9 +31,21 @@ export function ScanLoanScreen({ navigation }: Props) {
   async function onConfirm() {
     if (!payload) return;
     const state = await loadState();
-    const tool = state.tools.find((t) => t.id === payload.toolId);
+    let tool = state.tools.find((t) => t.id === payload.toolId);
     if (!tool) {
-      Alert.alert('Tool not found on this device', 'In v1 (standalone phone), you can only confirm loans for tools you have locally.');
+      // Option A: auto-create tool locally so the flow works on a fresh phone.
+      await addTool({
+        id: payload.toolId,
+        name: payload.toolName || 'Imported tool',
+        ownerName: payload.ownerName,
+        createdAt: new Date().toISOString(),
+      });
+      const nextState = await loadState();
+      tool = nextState.tools.find((t) => t.id === payload.toolId);
+    }
+
+    if (!tool) {
+      Alert.alert('Could not import tool', 'Please try scanning again.');
       navigation.goBack();
       return;
     }
@@ -98,7 +111,7 @@ export function ScanLoanScreen({ navigation }: Props) {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Scanned</Text>
           <Text style={styles.cardLine}>Owner: {payload.ownerName}</Text>
-          <Text style={styles.cardLine}>Tool ID: {payload.toolId}</Text>
+          <Text style={styles.cardLine}>Tool: {payload.toolName ?? payload.toolId}</Text>
           <Text style={styles.cardLine}>Due: {payload.dueAt ? new Date(payload.dueAt).toLocaleDateString() : '—'}</Text>
 
           <Pressable style={[styles.btn, styles.primary]} onPress={onConfirm}>
