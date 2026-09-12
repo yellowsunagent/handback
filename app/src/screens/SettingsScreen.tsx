@@ -1,124 +1,165 @@
 import React from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
+import type { AppState } from '../types/models';
 import type { RootStackParamList } from '../types/nav';
-import { addTool, loadState, resetState, setMyName } from '../storage/store';
-import { newId } from '../lib/id';
+import { discardBackup, exportBackup, pickBackup, reconcileReminders } from '../services/native';
+import { useApp } from '../ui/AppContext';
+import { Button, Card, Field, Header, KeyboardScreen } from '../ui/components';
+import { colors, common } from '../ui/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
+function counts(state: AppState) {
+  return `${state.people.length} people · ${state.tools.length} tools · ${state.loans.length} loans`;
+}
+
 export function SettingsScreen({ navigation }: Props) {
-  const [myName, setName] = React.useState('Me');
-  const [saving, setSaving] = React.useState(false);
+  const { state, refresh, commit, replace } = useApp();
+  const [name, setName] = React.useState('');
+  const [savingName, setSavingName] = React.useState(false);
+  const [backupBusy, setBackupBusy] = React.useState(false);
+  const [restoreCandidate, setRestoreCandidate] = React.useState<AppState>();
+  const lock = React.useRef(false);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      void refresh().catch(() => undefined);
+    }, [refresh]),
+  );
 
   React.useEffect(() => {
-    void (async () => {
-      const state = await loadState();
-      setName(state.myName || 'Me');
-    })();
-  }, []);
+    if (!state) return;
+    setName(state.people.find((person) => person.id === state.profileId)?.name ?? '');
+  }, [state]);
 
-  async function onSave() {
-    setSaving(true);
+  React.useEffect(() => {
+    if (!restoreCandidate) return;
+    return () => {
+      void discardBackup(restoreCandidate);
+    };
+  }, [restoreCandidate]);
+
+  if (!state) return null;
+  const currentState = state;
+
+  async function saveName() {
+    const cleaned = name.trim();
+    if (!cleaned || savingName) return;
+    setSavingName(true);
     try {
-      await setMyName(myName);
-      navigation.goBack();
+      await commit({ type: 'profile', name: cleaned });
+      Alert.alert('Profile updated', 'Your existing loans and ownership records stayed attached to the same local identity.');
+    } catch (error) {
+      Alert.alert('Could not update profile', error instanceof Error ? error.message : 'Please try again.');
     } finally {
-      setSaving(false);
+      setSavingName(false);
     }
   }
 
-  async function onSeedDemo() {
-    const confirmed = await new Promise<boolean>((resolve) => {
-      Alert.alert('Seed demo tools?', 'Adds a handful of tools to make demos fast.', [
-        { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-        { text: 'Add demo tools', style: 'default', onPress: () => resolve(true) },
-      ]);
-    });
-    if (!confirmed) return;
-
-    const state = await loadState();
-    const ownerName = state.myName || 'Me';
-
-    const names = ['Drill', 'Socket set', 'Hammer', 'Ladder', 'Leaf blower'];
-    for (const n of names) {
-      await addTool({
-        id: await newId('tool'),
-        name: n,
-        ownerName,
-        createdAt: new Date().toISOString(),
-      });
+  async function exportCurrent() {
+    if (backupBusy) return;
+    setBackupBusy(true);
+    try {
+      await exportBackup(currentState);
+      Alert.alert('Share sheet opened', 'Choose where to keep your HandBack backup. If you cancel the share sheet, no backup is saved elsewhere.');
+    } catch (error) {
+      Alert.alert('Could not open backup export', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setBackupBusy(false);
     }
-
-    Alert.alert('Done', 'Demo tools added.');
   }
 
-  async function onReset() {
-    const confirmed = await new Promise<boolean>((resolve) => {
-      Alert.alert('Reset local data?', 'This clears all tools and loans on this device.', [
-        { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-        { text: 'Reset', style: 'destructive', onPress: () => resolve(true) },
-      ]);
-    });
-    if (!confirmed) return;
+  async function chooseRestore() {
+    if (backupBusy) return;
+    setBackupBusy(true);
+    try {
+      const candidate = await pickBackup();
+      if (candidate) setRestoreCandidate(candidate);
+    } catch (error) {
+      Alert.alert('Could not read backup', error instanceof Error ? error.message : 'The backup was rejected and your current records are unchanged.');
+    } finally {
+      setBackupBusy(false);
+    }
+  }
 
-    await resetState();
-    Alert.alert('Reset complete', 'Local data cleared.');
+  function replaceWithCandidate() {
+    if (!restoreCandidate || lock.current) return;
+    const candidate = restoreCandidate;
+    Alert.alert('Replace local data?', `Restore will replace this phone’s current records with ${counts(candidate)}. This cannot merge the two datasets.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Export current first', onPress: () => { void exportCurrent().then(() => replaceWithCandidate()); } },
+      { text: 'Replace local data', style: 'destructive', onPress: () => { void performRestore(candidate); } },
+    ]);
+  }
+
+  async function performRestore(candidate: AppState) {
+    if (lock.current) return;
+    lock.current = true;
+    setBackupBusy(true);
+    try {
+      const next = await replace(candidate);
+      setRestoreCandidate(undefined);
+      try {
+        await reconcileReminders(next);
+      } catch {
+        Alert.alert('Data restored', 'Your records were restored. Local reminders could not be refreshed; you can still track every loan in the app.');
+        return;
+      }
+      Alert.alert('Data restored', 'Your HandBack records are now restored on this phone.');
+    } catch (error) {
+      Alert.alert('Restore failed', error instanceof Error ? error.message : 'Your current records were preserved.');
+    } finally {
+      lock.current = false;
+      setBackupBusy(false);
+    }
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Settings</Text>
+    <KeyboardScreen>
+      <Header title="Settings" subtitle="HandBack stays local. Use a backup when you want a portable copy." onBack={() => navigation.goBack()} />
 
-      <Text style={styles.label}>My name</Text>
-      <TextInput
-        style={styles.input}
-        value={myName}
-        onChangeText={setName}
-        placeholder="e.g., Jason"
-        placeholderTextColor="rgba(255,255,255,0.35)"
-      />
+      <Card style={styles.sectionCard}>
+        <Text style={styles.sectionKicker}>YOUR PROFILE</Text>
+        <Field label="Display name" value={name} onChangeText={setName} placeholder="e.g. Jason" maxLength={40} />
+        <Button label="Save name" onPress={() => void saveName()} variant="primary" busy={savingName} disabled={!name.trim()} />
+        <Text style={styles.help}>Changing this name does not rename or merge any other person.</Text>
+      </Card>
 
-      <Pressable style={[styles.btn, saving && styles.btnDisabled]} onPress={onSave} disabled={saving}>
-        <Text style={styles.btnText}>{saving ? 'Saving…' : 'Save'}</Text>
-      </Pressable>
+      <Button label="Manage people" onPress={() => navigation.navigate('People')} variant="secondary" style={styles.button} />
+      <Button label="Export a backup" onPress={() => void exportCurrent()} variant="secondary" busy={backupBusy} style={styles.button} />
+      <Button label="Restore from backup" onPress={() => void chooseRestore()} variant="secondary" busy={backupBusy} style={styles.button} />
 
-      <Pressable style={[styles.btn, styles.secondary]} onPress={() => void onSeedDemo()}>
-        <Text style={styles.secondaryText}>Seed demo tools</Text>
-      </Pressable>
+      {restoreCandidate ? (
+        <Card style={styles.previewCard}>
+          <Text style={styles.previewKicker}>BACKUP READY FOR REVIEW</Text>
+          <Text style={styles.previewTitle}>This backup is staged safely</Text>
+          <Text style={common.note}>{counts(restoreCandidate)}</Text>
+          <Text style={styles.previewBody}>Restore replaces local records, including archive state, history, reminder preferences, and accessible photos. Your current records stay unchanged until you explicitly choose Replace local data.</Text>
+          <Button label="Review replacement" onPress={replaceWithCandidate} variant="primary" disabled={backupBusy} />
+          <Button label="Cancel restore" onPress={() => setRestoreCandidate(undefined)} variant="quiet" disabled={backupBusy} />
+        </Card>
+      ) : null}
 
-      <Pressable style={[styles.btn, styles.danger]} onPress={() => void onReset()}>
-        <Text style={styles.dangerText}>Reset local data</Text>
-      </Pressable>
-
-      <Text style={styles.note}>Handback is local-first. This name is stored only on this device.</Text>
-    </View>
+      <View style={styles.about}>
+        <Text style={styles.aboutTitle}>Local records</Text>
+        <Text style={common.note}>{counts(state)}</Text>
+        <Text style={common.note}>Photos and private notes stay on this device and are included in backups. Shared QR codes contain only the details needed to save a loan copy.</Text>
+      </View>
+    </KeyboardScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0b0d12', paddingTop: 64, paddingHorizontal: 16 },
-  title: { color: '#fff', fontSize: 22, fontWeight: '800', marginBottom: 16 },
-  label: { color: 'rgba(255,255,255,0.75)', fontSize: 13, marginBottom: 8 },
-  input: {
-    borderRadius: 12,
-    padding: 12,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    color: '#fff',
-    fontSize: 16,
-  },
-  btn: {
-    marginTop: 16,
-    backgroundColor: '#6ee7b7',
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  btnDisabled: { opacity: 0.6 },
-  btnText: { color: '#05140d', fontSize: 15, fontWeight: '800' },
-  secondary: { backgroundColor: 'rgba(255,255,255,0.08)' },
-  secondaryText: { color: 'rgba(255,255,255,0.9)', fontSize: 15, fontWeight: '800' },
-  danger: { backgroundColor: '#ef4444' },
-  dangerText: { color: '#fff', fontSize: 15, fontWeight: '900' },
-  note: { marginTop: 14, color: 'rgba(255,255,255,0.65)', fontSize: 12, lineHeight: 18 },
+  sectionCard: { marginBottom: 14 },
+  sectionKicker: { color: colors.primary, fontSize: 10, fontWeight: '900', letterSpacing: 0.7, marginBottom: 14 },
+  help: { color: colors.dim, fontSize: 12, lineHeight: 17, marginTop: 11 },
+  button: { marginBottom: 10 },
+  previewCard: { borderColor: '#83672c', marginTop: 13 },
+  previewKicker: { color: colors.warning, fontSize: 10, fontWeight: '900', letterSpacing: 0.7, marginBottom: 7 },
+  previewTitle: { color: colors.ink, fontSize: 18, fontWeight: '800', marginBottom: 5 },
+  previewBody: { color: colors.muted, fontSize: 13, lineHeight: 19, marginBottom: 15, marginTop: 10 },
+  about: { borderTopColor: colors.line, borderTopWidth: StyleSheet.hairlineWidth, marginTop: 25, paddingTop: 17 },
+  aboutTitle: { color: colors.ink, fontSize: 15, fontWeight: '800', marginBottom: 6 },
 });

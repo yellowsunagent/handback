@@ -1,28 +1,46 @@
-export type ToolId = string;
-export type LoanId = string;
+export type Person = {
+  id: string;
+  name: string;
+  note?: string;
+  archived?: boolean;
+};
 
 export type Tool = {
-  id: ToolId;
+  id: string;
   name: string;
+  ownerId: string;
+  notes?: string;
   photoUri?: string;
-  ownerName: string; // "Me" display name (editable)
-  createdAt: string; // ISO
-  currentLoanId?: LoanId;
+  archived?: boolean;
+  createdAt: string;
 };
 
 export type Loan = {
-  id: LoanId;
-  toolId: ToolId;
-  ownerName: string;
-  borrowerName: string;
-  startedAt: string; // ISO
-  dueAt?: string; // ISO
-  returnedAt?: string; // ISO
+  id: string;
+  toolId: string;
+  ownerId: string;
+  borrowerId: string;
+  // Calendar days (YYYY-MM-DD), never UTC instants.
+  startedOn: string;
+  dueOn?: string;
+  reminder: boolean;
+  returnedOn?: string;
 };
 
 export type AppState = {
-  version: 1;
-  myName: string;
+  version: 2;
+  profileId: string;
+  setupComplete: boolean;
+  people: Person[];
   tools: Tool[];
   loans: Loan[];
 };
+
+export type Command =
+  | { type: 'profile'; name: string }
+  | { type: 'person'; person: Person }
+  | { type: 'tool'; tool: Tool }
+  | { type: 'loan'; loan: Loan }
+  | { type: 'return'; loanId: string; on: string }
+  | { type: 'undo'; loanId: string }
+  | { type: 'deleteLoan'; loanId: string };

@@ -1,6 +1,6 @@
 # HandBack Product Requirements
 
-Status: Agreed product scope; implementation pending.
+Status: Agreed product scope; source implementation completed. Device verification and the friends pilot remain pending; see IMPLEMENTATION.md for actual checks and release gates.
 
 This document records the decisions approved in the HandBack PRD interview. It governs the iOS friends pilot and the path toward a later public release. It is not a claim that the current demo meets these requirements.
 

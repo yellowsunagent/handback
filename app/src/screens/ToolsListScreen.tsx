@@ -1,116 +1,174 @@
 import React from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import type { RootStackParamList } from '../types/nav';
-import { loadState } from '../storage/store';
-import type { Tool } from '../types/models';
+import type { Loan, Tool } from '../types/models';
+import { useApp } from '../ui/AppContext';
+import { Button, Card, EmptyState, Header, PhotoThumbnail, Screen, StatusPill } from '../ui/components';
+import { colors, common } from '../ui/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ToolsList'>;
 
 export function ToolsListScreen({ navigation }: Props) {
-  const [tools, setTools] = React.useState<Tool[]>([]);
+  const { state, refresh } = useApp();
+  const [search, setSearch] = React.useState('');
+  const [showArchived, setShowArchived] = React.useState(false);
 
-  async function refresh() {
-    const state = await loadState();
-    setTools(state.tools);
-  }
+  useFocusEffect(
+    React.useCallback(() => {
+      void refresh().catch(() => undefined);
+    }, [refresh]),
+  );
 
-  React.useEffect(() => {
-    const unsub = navigation.addListener('focus', () => {
-      void refresh();
-    });
-    void refresh();
-    return unsub;
-  }, [navigation]);
+  if (!state) return null;
+  const activeLoans = new Map(state.loans.filter((loan) => !loan.returnedOn).map((loan) => [loan.toolId, loan] as const));
+  const people = new Map(state.people.map((person) => [person.id, person] as const));
+  const query = search.trim().toLocaleLowerCase();
+  const matches = (tool: Tool) => !query || `${tool.name} ${tool.notes ?? ''}`.toLocaleLowerCase().includes(query);
+  const currentTools = state.tools.filter((tool) => !tool.archived && matches(tool));
+  const archivedTools = state.tools.filter((tool) => tool.archived && matches(tool));
+  const profile = people.get(state.profileId);
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Handback</Text>
-        <View style={styles.headerButtons}>
-          <Pressable style={styles.headerBtn} onPress={() => navigation.navigate('ScanLoan')}>
-            <Text style={styles.headerBtnText}>Scan</Text>
+    <Screen>
+      <Header
+        title="HandBack"
+        subtitle={profile ? `Hi ${profile.name}. Keep the handoff clear.` : 'Your local tool ledger'}
+        action={
+          <Pressable accessibilityRole="button" onPress={() => navigation.navigate('Settings')} style={styles.iconButton}>
+            <Text style={styles.iconButtonText}>⚙</Text>
           </Pressable>
-          <Pressable style={styles.headerBtn} onPress={() => navigation.navigate('Loans')}>
-            <Text style={styles.headerBtnText}>Loans</Text>
-          </Pressable>
-          <Pressable style={styles.headerBtn} onPress={() => navigation.navigate('Settings')}>
-            <Text style={styles.headerBtnText}>Settings</Text>
-          </Pressable>
-          <Pressable style={[styles.headerBtn, styles.primary]} onPress={() => navigation.navigate('AddTool')}>
-            <Text style={[styles.headerBtnText, styles.primaryText]}>+ Tool</Text>
-          </Pressable>
-        </View>
+        }
+      />
+
+      <View style={styles.actionGrid}>
+        <Pressable style={[styles.actionCard, styles.actionCardPrimary]} onPress={() => navigation.navigate('StartLoan', { mode: 'lend' })}>
+          <Text style={styles.actionKicker}>I LENT A TOOL</Text>
+          <Text style={styles.actionTitle}>Track it out</Text>
+          <Text style={styles.actionBody}>Choose one of your available tools.</Text>
+          <Text style={styles.actionArrow}>→</Text>
+        </Pressable>
+        <Pressable style={styles.actionCard} onPress={() => navigation.navigate('StartLoan', { mode: 'borrow' })}>
+          <Text style={styles.actionKicker}>I BORROWED A TOOL</Text>
+          <Text style={styles.actionTitle}>Track it back</Text>
+          <Text style={styles.actionBody}>Record someone else’s tool.</Text>
+          <Text style={styles.actionArrow}>→</Text>
+        </Pressable>
       </View>
 
-      {tools.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>No tools yet</Text>
-          <Text style={styles.emptyBody}>Add a tool, then start a loan and confirm it by scanning a QR code.</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={tools}
-          keyExtractor={(t) => t.id}
-          contentContainerStyle={styles.list}
-          renderItem={({ item }) => <ToolRow tool={item} onPress={() => navigation.navigate('ToolDetail', { toolId: item.id })} />}
+      <View style={styles.sectionHeader}>
+        <Text style={common.sectionTitle}>My tools</Text>
+        <Pressable accessibilityRole="button" onPress={() => navigation.navigate('AddTool')}>
+          <Text style={styles.link}>+ Add tool</Text>
+        </Pressable>
+      </View>
+
+      {currentTools.length === 0 ? (
+        <EmptyState
+          title={query ? 'No matching tools' : 'Your inventory is ready when you are'}
+          body={query ? 'Try another search.' : 'Add the tools you own, or record a tool you borrowed from a friend.'}
+          action={!query ? <Button label="Add a tool" onPress={() => navigation.navigate('AddTool')} variant="secondary" /> : undefined}
         />
+      ) : (
+        currentTools.map((tool) => (
+          <ToolRow
+            key={tool.id}
+            tool={tool}
+            loan={activeLoans.get(tool.id)}
+            profileId={state.profileId}
+            people={people}
+            onPress={() => navigation.navigate('ToolDetail', { toolId: tool.id })}
+          />
+        ))
       )}
-    </View>
+
+      {archivedTools.length > 0 ? (
+        <View style={styles.archivedBlock}>
+          <Pressable accessibilityRole="button" onPress={() => setShowArchived((value) => !value)} style={styles.archivedHeader}>
+            <Text style={styles.archivedTitle}>Archived tools ({archivedTools.length})</Text>
+            <Text style={styles.link}>{showArchived ? 'Hide' : 'Show'}</Text>
+          </Pressable>
+          {showArchived
+            ? archivedTools.map((tool) => (
+                <ToolRow
+                  key={tool.id}
+                  tool={tool}
+                  loan={activeLoans.get(tool.id)}
+                  profileId={state.profileId}
+                  people={people}
+                  onPress={() => navigation.navigate('ToolDetail', { toolId: tool.id })}
+                  archived
+                />
+              ))
+            : null}
+        </View>
+      ) : null}
+
+      <View style={styles.bottomLinks}>
+        <Button label="Outstanding loans" onPress={() => navigation.navigate('Loans', { initialTab: 'active' })} variant="secondary" style={styles.bottomButton} />
+        <Button label="People" onPress={() => navigation.navigate('People')} variant="quiet" style={styles.bottomButton} />
+      </View>
+    </Screen>
   );
 }
 
-function ToolRow({ tool, onPress }: { tool: Tool; onPress: () => void }) {
-  const status = tool.currentLoanId ? 'Loaned out' : 'Available';
+function ToolRow({
+  tool,
+  loan,
+  profileId,
+  people,
+  onPress,
+  archived = false,
+}: {
+  tool: Tool;
+  loan?: Loan;
+  profileId: string;
+  people: Map<string, { id: string; name: string }>;
+  onPress: () => void;
+  archived?: boolean;
+}) {
+  const isMine = tool.ownerId === profileId;
+  let status = isMine ? 'Available for me to lend' : `Available to borrow from ${people.get(tool.ownerId)?.name ?? 'an archived person'}`;
+  let tone: 'muted' | 'good' | 'warning' = 'good';
+  if (loan) {
+    const otherId = isMine ? loan.borrowerId : loan.ownerId;
+    status = isMine ? `Lent to ${people.get(otherId)?.name ?? 'an archived person'}` : `Borrowed from ${people.get(otherId)?.name ?? 'an archived person'}`;
+    tone = 'warning';
+  }
   return (
-    <Pressable style={styles.row} onPress={onPress}>
+    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [common.row, pressed && styles.pressed, archived && styles.archivedRow]}>
+      <PhotoThumbnail uri={tool.photoUri} size={56} />
       <View style={styles.rowMain}>
-        <Text style={styles.rowTitle} numberOfLines={1}>
-          {tool.name}
-        </Text>
-        <Text style={styles.rowSub}>
-          Owner: {tool.ownerName} · {status}
-        </Text>
+        <Text style={common.rowTitle} numberOfLines={1}>{tool.name}</Text>
+        <Text style={common.rowSub} numberOfLines={1}>Owner: {people.get(tool.ownerId)?.name ?? 'Archived person'}</Text>
+        <View style={styles.rowStatus}><StatusPill label={status} tone={tone} /></View>
       </View>
-      <Text style={styles.chev}>›</Text>
+      <Text style={styles.chevron}>›</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0b0d12' },
-  header: {
-    paddingTop: 64,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.12)',
-  },
-  title: { color: '#fff', fontSize: 28, fontWeight: '700', letterSpacing: 0.2 },
-  headerButtons: { flexDirection: 'row', gap: 10, marginTop: 12 },
-  headerBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
-  headerBtnText: { color: 'rgba(255,255,255,0.9)', fontSize: 14, fontWeight: '600' },
-  primary: { backgroundColor: '#6ee7b7' },
-  primaryText: { color: '#05140d' },
-  empty: { padding: 20, marginTop: 24 },
-  emptyTitle: { color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 6 },
-  emptyBody: { color: 'rgba(255,255,255,0.75)', fontSize: 14, lineHeight: 20 },
-  list: { padding: 12 },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    marginBottom: 10,
-  },
-  rowMain: { flex: 1 },
-  rowTitle: { color: '#fff', fontSize: 16, fontWeight: '700', marginBottom: 4 },
-  rowSub: { color: 'rgba(255,255,255,0.7)', fontSize: 13 },
-  chev: { color: 'rgba(255,255,255,0.6)', fontSize: 22, paddingLeft: 10 },
+  iconButton: { alignItems: 'center', backgroundColor: colors.surface, borderColor: colors.line, borderRadius: 12, borderWidth: 1, height: 42, justifyContent: 'center', width: 42 },
+  iconButtonText: { color: colors.ink, fontSize: 20 },
+  actionGrid: { flexDirection: 'row', gap: 10, marginBottom: 30 },
+  actionCard: { backgroundColor: colors.surface, borderColor: colors.line, borderRadius: 17, borderWidth: 1, flex: 1, minHeight: 157, padding: 14 },
+  actionCardPrimary: { backgroundColor: '#173227', borderColor: '#2e674f' },
+  actionKicker: { color: colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 0.6, marginBottom: 11 },
+  actionTitle: { color: colors.ink, fontSize: 18, fontWeight: '800' },
+  actionBody: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 5 },
+  actionArrow: { bottom: 9, color: colors.primary, fontSize: 22, position: 'absolute', right: 13 },
+  sectionHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
+  link: { color: colors.primary, fontSize: 14, fontWeight: '800' },
+  rowMain: { flex: 1, marginLeft: 12 },
+  rowStatus: { marginTop: 7 },
+  chevron: { color: colors.dim, fontSize: 25, marginLeft: 8 },
+  pressed: { opacity: 0.78 },
+  archivedBlock: { marginTop: 13 },
+  archivedHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10, paddingVertical: 8 },
+  archivedTitle: { color: colors.muted, fontSize: 14, fontWeight: '800' },
+  archivedRow: { opacity: 0.72 },
+  bottomLinks: { marginTop: 15 },
+  bottomButton: { marginBottom: 10 },
 });

@@ -1,152 +1,116 @@
 import React from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
-import { BarCodeScanner } from 'expo-barcode-scanner';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
+import type { LoanPayload } from '../domain/qr';
+import { importLoanQR, parseLoanQR } from '../domain/qr';
 import type { RootStackParamList } from '../types/nav';
-import { addLoan, addTool, loadState, updateTool } from '../storage/store';
+import { useApp } from '../ui/AppContext';
+import { Button, Card, Header, Screen } from '../ui/components';
+import { colors, common } from '../ui/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ScanLoan'>;
 
-type LoanPayload = {
-  v: 1;
-  kind: 'loan';
-  loanId: string;
-  toolId: string;
-  toolName?: string;
-  ownerName: string;
-  dueAt?: string;
-};
-
 export function ScanLoanScreen({ navigation }: Props) {
-  const [perm, setPerm] = React.useState<'unknown' | 'granted' | 'denied'>('unknown');
-  const [payload, setPayload] = React.useState<LoanPayload | null>(null);
+  const { state, refresh, apply } = useApp();
+  const [permission, requestPermission] = useCameraPermissions();
+  const [payload, setPayload] = React.useState<LoanPayload>();
+  const [scanError, setScanError] = React.useState<string>();
+  const [saving, setSaving] = React.useState(false);
+  const lock = React.useRef(false);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      void refresh().catch(() => undefined);
+    }, [refresh]),
+  );
 
   React.useEffect(() => {
-    void (async () => {
-      const res = await BarCodeScanner.requestPermissionsAsync();
-      setPerm(res.status === 'granted' ? 'granted' : 'denied');
-    })();
-  }, []);
+    if (!permission) void requestPermission().catch(() => setScanError('Camera access could not be requested. You can record the loan manually.'));
+  }, [permission, requestPermission]);
 
-  async function onConfirm() {
-    if (!payload) return;
-    const state = await loadState();
-    let tool = state.tools.find((t) => t.id === payload.toolId);
-    if (!tool) {
-      // Option A: auto-create tool locally so the flow works on a fresh phone.
-      await addTool({
-        id: payload.toolId,
-        name: payload.toolName || 'Imported tool',
-        ownerName: payload.ownerName,
-        createdAt: new Date().toISOString(),
-      });
-      const nextState = await loadState();
-      tool = nextState.tools.find((t) => t.id === payload.toolId);
-    }
+  if (!state) return null;
+  const existing = payload ? state.loans.find((loan) => loan.id === payload.loanId) : undefined;
 
-    if (!tool) {
-      Alert.alert('Could not import tool', 'Please try scanning again.');
-      navigation.goBack();
-      return;
-    }
-    if (tool.currentLoanId) {
-      Alert.alert('Already loaned out');
-      navigation.goBack();
-      return;
-    }
-
-    const borrowerName = state.myName || 'Me';
-
-    await addLoan({
-      id: payload.loanId,
-      toolId: payload.toolId,
-      ownerName: payload.ownerName,
-      borrowerName,
-      startedAt: new Date().toISOString(),
-      dueAt: payload.dueAt,
-    });
-
-    await updateTool({ ...tool, currentLoanId: payload.loanId });
-
-    Alert.alert('Loan confirmed', `${tool.name} is now marked as loaned out.`);
-    navigation.navigate('ToolDetail', { toolId: tool.id });
-  }
-
-  function onScan(data: string) {
+  function onScan(raw: string) {
+    if (payload || lock.current) return;
     try {
-      const parsed = JSON.parse(data) as LoanPayload;
-      if (!parsed || parsed.v !== 1 || parsed.kind !== 'loan') throw new Error('bad payload');
+      const parsed = parseLoanQR(raw);
       setPayload(parsed);
-    } catch {
-      Alert.alert('Invalid QR', 'That QR code is not a Handback loan.');
+      setScanError(undefined);
+    } catch (error) {
+      setScanError(error instanceof Error ? error.message : 'That code is not a supported HandBack loan.');
     }
   }
 
-  if (perm === 'denied') {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Camera permission needed</Text>
-        <Text style={styles.sub}>Enable camera access to scan loan QR codes.</Text>
-      </View>
-    );
+  async function saveCopy() {
+    if (!payload || saving || lock.current) return;
+    lock.current = true;
+    setSaving(true);
+    try {
+      const next = await apply((previous) => importLoanQR(previous, payload));
+      const saved = next.loans.find((loan) => loan.id === payload.loanId);
+      if (!saved) throw new Error('The loan copy could not be saved.');
+      Alert.alert(existing ? 'Loan already saved' : 'Copy saved', existing ? 'The original local record was kept exactly as it is. Re-scanning never overwrites edits or a recorded return.' : 'This phone now has its own local record. It records the local user as the borrower and does not notify the owner or sync later changes.', [{ text: 'Open loan', onPress: () => navigation.replace('LoanDetail', { loanId: saved.id }) }]);
+    } catch (error) {
+      Alert.alert('Could not save QR copy', error instanceof Error ? error.message : 'No local changes were made. Please try again.');
+    } finally {
+      lock.current = false;
+      setSaving(false);
+    }
   }
 
+  const permissionDenied = permission?.granted === false;
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Confirm loan</Text>
-      <Text style={styles.sub}>Scan the owner’s QR code.</Text>
+    <Screen>
+      <Header title="Save a QR copy" subtitle="Scan an owner’s saved loan, review the details, then choose whether to keep a copy here." onBack={() => navigation.goBack()} />
+      {!permissionDenied ? (
+        <View style={styles.cameraFrame}>
+          {permission?.granted ? <CameraView style={styles.camera} barcodeScannerSettings={{ barcodeTypes: ['qr'] }} onBarcodeScanned={payload ? undefined : ({ data }) => onScan(data)} /> : <Text style={styles.cameraStatus}>Requesting camera access…</Text>}
+        </View>
+      ) : (
+        <Card style={styles.permissionCard}>
+          <Text style={styles.cardTitle}>Camera access is off</Text>
+          <Text style={common.note}>You can still record a loan manually. Camera access is optional and can be enabled later in Settings.</Text>
+          {permission?.canAskAgain ? <Button label="Allow camera" onPress={() => void requestPermission().catch(() => setScanError('Camera access could not be requested. You can record the loan manually.'))} variant="secondary" style={styles.cardButton} /> : null}
+          <Button label="Record manually" onPress={() => navigation.replace('StartLoan', { mode: 'borrow' })} variant="primary" style={styles.cardButton} />
+        </Card>
+      )}
 
-      <View style={styles.scannerBox}>
-        {perm === 'granted' ? (
-          <BarCodeScanner
-            onBarCodeScanned={payload ? undefined : ({ data }) => onScan(data)}
-            style={{ width: '100%', height: 320 }}
-          />
-        ) : (
-          <Text style={{ color: 'rgba(255,255,255,0.7)' }}>Requesting permission…</Text>
-        )}
-      </View>
+      {scanError ? <Card style={styles.errorCard}><Text style={styles.errorTitle}>Could not read that code</Text><Text style={common.note}>{scanError}</Text><Button label="Scan again" onPress={() => setScanError(undefined)} variant="quiet" style={styles.cardButton} /></Card> : null}
 
       {payload ? (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Scanned</Text>
-          <Text style={styles.cardLine}>Owner: {payload.ownerName}</Text>
-          <Text style={styles.cardLine}>Tool: {payload.toolName ?? payload.toolId}</Text>
-          <Text style={styles.cardLine}>Due: {payload.dueAt ? new Date(payload.dueAt).toLocaleDateString() : '—'}</Text>
-
-          <Pressable style={[styles.btn, styles.primary]} onPress={onConfirm}>
-            <Text style={[styles.btnText, styles.primaryText]}>Confirm</Text>
-          </Pressable>
-
-          <Pressable style={styles.btn} onPress={() => setPayload(null)}>
-            <Text style={styles.btnText}>Scan again</Text>
-          </Pressable>
-        </View>
+        <Card style={styles.reviewCard}>
+          <Text style={styles.reviewKicker}>{existing ? 'ALREADY ON THIS PHONE' : 'REVIEW BEFORE SAVING'}</Text>
+          <Text style={styles.reviewTitle}>{payload.toolName}</Text>
+          <Text style={styles.detailLine}>Owner: {payload.ownerName}</Text>
+          <Text style={styles.detailLine}>Borrower: {payload.borrowerName}</Text>
+          <Text style={styles.detailLine}>Started: {payload.startedOn}</Text>
+          <Text style={styles.detailLine}>Due: {payload.dueOn ?? 'No due date'}</Text>
+          <Text style={styles.reviewNote}>{existing ? 'Re-scanning opens the original local record. It will not overwrite edits or a recorded return.' : 'Saving creates a local copy and records the local user as the borrower. The owner does not receive a notification or confirmation.'}</Text>
+          <Button label={existing ? 'Open saved loan' : 'Save a copy'} onPress={() => void saveCopy()} variant="primary" busy={saving} />
+          <Button label="Scan another code" onPress={() => { setPayload(undefined); setScanError(undefined); }} variant="quiet" disabled={saving} />
+        </Card>
       ) : null}
-    </View>
+      <Text style={styles.footer}>Only supported HandBack loan details are accepted. Photos and private notes never travel in the QR code.</Text>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0b0d12', paddingTop: 64, paddingHorizontal: 16 },
-  title: { color: '#fff', fontSize: 22, fontWeight: '800', marginBottom: 6 },
-  sub: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginBottom: 16 },
-  scannerBox: {
-    borderRadius: 18,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-  },
-  card: { marginTop: 12, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 16, padding: 14 },
-  cardTitle: { color: '#fff', fontSize: 14, fontWeight: '900', marginBottom: 8 },
-  cardLine: { color: 'rgba(255,255,255,0.8)', fontSize: 13, marginBottom: 6 },
-  btn: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  btnText: { color: 'rgba(255,255,255,0.9)', fontSize: 15, fontWeight: '800' },
-  primary: { backgroundColor: '#6ee7b7' },
-  primaryText: { color: '#05140d' },
+  cameraFrame: { backgroundColor: '#05070a', borderColor: colors.line, borderRadius: 18, height: 310, overflow: 'hidden' },
+  camera: { flex: 1 },
+  cameraStatus: { color: colors.muted, flex: 1, paddingTop: 140, textAlign: 'center' },
+  permissionCard: { marginTop: 2 },
+  cardTitle: { color: colors.ink, fontSize: 17, fontWeight: '800', marginBottom: 6 },
+  cardButton: { marginTop: 13 },
+  errorCard: { borderColor: '#6d3c3f', marginTop: 13 },
+  errorTitle: { color: colors.danger, fontSize: 15, fontWeight: '800', marginBottom: 5 },
+  reviewCard: { marginTop: 15 },
+  reviewKicker: { color: colors.primary, fontSize: 10, fontWeight: '900', letterSpacing: 0.7, marginBottom: 7 },
+  reviewTitle: { color: colors.ink, fontSize: 21, fontWeight: '800', marginBottom: 11 },
+  detailLine: { color: colors.muted, fontSize: 14, lineHeight: 22 },
+  reviewNote: { color: colors.dim, fontSize: 12, lineHeight: 18, marginBottom: 15, marginTop: 11 },
+  footer: { color: colors.dim, fontSize: 12, lineHeight: 18, marginTop: 18, textAlign: 'center' },
 });
