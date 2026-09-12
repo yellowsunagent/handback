@@ -139,7 +139,7 @@ export function LoanDetailScreen({ route, navigation }: Props) {
         {active ? <Button label="Edit loan" onPress={() => navigation.navigate('EditLoan', { loanId: currentLoan.id })} variant="secondary" disabled={busy} /> : null}
         {active ? <Button label="Mark returned" onPress={markReturned} variant="primary" busy={busy} /> : <Button label="Undo return" onPress={undoReturn} variant="secondary" busy={busy} />}
         {active ? <Button label="Prepare a reminder" onPress={() => void shareReminder()} variant="secondary" disabled={busy} /> : null}
-        {isMineToLend ? <Button label="Show QR copy" onPress={() => navigation.navigate('LoanQR', { loanId: currentLoan.id })} variant="quiet" disabled={busy} /> : null}
+        {active && isMineToLend ? <Button label="Show QR copy" onPress={() => navigation.navigate('LoanQR', { loanId: currentLoan.id })} variant="quiet" disabled={busy} /> : null}
         <Button label="Delete loan record" onPress={deleteLoan} variant="quiet" disabled={busy} />
       </View>
 

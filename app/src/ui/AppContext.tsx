@@ -3,6 +3,8 @@ import { AppState as NativeAppState } from 'react-native';
 import type { AppState, Command } from '../types/models';
 import { dispatch, loadState, replaceState, updateState } from '../storage/store';
 import { localDay } from '../domain/dates';
+import { completeRestore, type RestoreResult } from '../services/restore';
+import { discardBackup, reconcileReminders } from '../services/native';
 
 type StateUpdater = (previous: AppState) => AppState;
 
@@ -14,7 +16,7 @@ type AppContextValue = {
   refresh: () => Promise<AppState>;
   commit: (command: Command) => Promise<AppState>;
   apply: (updater: StateUpdater) => Promise<AppState>;
-  replace: (next: AppState) => Promise<AppState>;
+  restore: (next: AppState) => Promise<RestoreResult>;
 };
 
 const Context = React.createContext<AppContextValue | null>(null);
@@ -37,6 +39,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setError(null);
       return next;
     } catch (caught) {
+      setError(errorMessage(caught));
       throw caught;
     } finally {
       setLoading(false);
@@ -81,19 +84,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const replace = React.useCallback(async (nextState: AppState) => {
-    try {
+  const restore = React.useCallback((candidate: AppState) => completeRestore(candidate, {
+    async replace(nextState) {
       const next = await replaceState(nextState);
       setState(next);
       setError(null);
       return next;
-    } catch (caught) {
-      setError(errorMessage(caught));
-      throw caught;
-    }
-  }, []);
+    },
+    reconcile: reconcileReminders,
+    discard: discardBackup,
+  }), []);
 
-  const value = React.useMemo(() => ({ state, loading, error, today, refresh, commit, apply, replace }), [state, loading, error, today, refresh, commit, apply, replace]);
+  const value = React.useMemo(() => ({ state, loading, error, today, refresh, commit, apply, restore }), [state, loading, error, today, refresh, commit, apply, restore]);
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }
 

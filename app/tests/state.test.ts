@@ -354,3 +354,19 @@ test('replaceState preserves the previous raw snapshot before replacing it', asy
   assert.equal(storage.values.get(RECOVERY_STORAGE_KEY), '{"version":2,"bad":true}');
   assert.deepEqual(await repository.loadState(), replacement);
 });
+
+test('undo explains an ownership correction without changing completed history', () => {
+  let state = readyState();
+  state = applyCommand(state, { type: 'loan', loan: { id: loanId, toolId, ownerId: profileId, borrowerId: friendId, startedOn: '2026-09-11', reminder: false } });
+  state = applyCommand(state, { type: 'return', loanId, on: '2026-09-12' });
+  state = applyCommand(state, { type: 'tool', tool: { ...state.tools[0], ownerId: friendId } });
+  assert.throws(() => applyCommand(state, { type: 'undo', loanId }), /owner has changed/i);
+  assert.equal(state.loans[0].returnedOn, '2026-09-12');
+});
+
+test('legacy repeated names across independent records require disambiguation', () => {
+  const tools = ['first', 'second'].map(id => ({ id, name: 'Drill', ownerName: 'Alex', createdAt: '2026-09-11T12:00:00.000Z' }));
+  const loans = tools.map(tool => ({ id: `loan_${tool.id}`, toolId: tool.id, ownerName: 'Alex', borrowerName: 'Sam', startedAt: '2026-09-11T12:00:00.000Z' }));
+  assert.throws(() => migrateLegacy({ version: 1, myName: 'Alex', tools, loans }, profileId), /ambiguous/);
+  assert.throws(() => migrateLegacy({ version: 1, myName: 'Alex', tools: tools.map(tool => ({ ...tool, ownerName: 'Sam' })), loans: [] }, profileId), /ambiguous/);
+});

@@ -3,7 +3,7 @@ export type RootStackParamList = {
   ToolsList: undefined;
   Loans: { initialTab?: 'active' | 'history' } | undefined;
   People: undefined;
-  AddTool: { toolId?: string; ownerId?: string } | undefined;
+  AddTool: { toolId?: string; ownerId?: string; borrowed?: boolean } | undefined;
   ToolDetail: { toolId: string };
   StartLoan: { mode: 'lend' | 'borrow'; toolId?: string };
   EditLoan: { loanId: string };

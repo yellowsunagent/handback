@@ -388,6 +388,9 @@ export function applyCommand(state: AppState, command: Command): AppState {
       if (existing.returnedOn === undefined) break;
       const tool = next.tools.find((candidate) => candidate.id === existing.toolId);
       if (tool?.archived) throw new StateError(`unarchive tool ${tool.id} before undoing its return`);
+      if (tool && tool.ownerId !== existing.ownerId) {
+        throw new StateError('This tool’s owner has changed. Correct its owner before undoing this return.');
+      }
       if (next.loans.some((loan) => loan.id !== loanId && loan.toolId === existing.toolId && loan.returnedOn === undefined)) {
         throw new StateError(`tool ${existing.toolId} already has an active loan; return it before undoing`);
       }
@@ -540,6 +543,20 @@ export function migrateLegacy(value: unknown, profileId: string): AppState {
         throw new StateError(`legacy tool ${tool.id} has an invalid current loan reference`);
       }
     }
+  }
+
+  // Tool IDs tie loan owners to tools, but names cannot link separate people.
+  // Require manual recovery when independent legacy references could be namesakes.
+  const independentNames = new Set<string>();
+  for (const name of [
+    ...legacyTools.map(tool => tool.ownerName),
+    ...legacyLoans.map(loan => loan.borrowerName),
+  ]) {
+    if (name === myName) continue;
+    if (independentNames.has(name)) {
+      throw new StateError(`legacy person name ${name} has repeated independent references; migration is ambiguous`);
+    }
+    independentNames.add(name);
   }
 
   const personIdByName = new Map<string, string>([[myName, id]]);

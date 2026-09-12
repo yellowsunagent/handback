@@ -5,13 +5,13 @@ import type { RootStackParamList } from '../types/nav';
 import { useApp } from '../ui/AppContext';
 import { Button, Field, KeyboardScreen } from '../ui/components';
 import { colors, common } from '../ui/theme';
-import { discardBackup, pickBackup, reconcileReminders } from '../services/native';
+import { discardBackup, pickBackup } from '../services/native';
 import type { AppState } from '../types/models';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Setup'>;
 
 export function SetupScreen(_props: Props) {
-  const { commit, replace } = useApp();
+  const { commit, restore } = useApp();
   const [name, setName] = React.useState('');
   const [saving, setSaving] = React.useState(false);
   const [restoreBusy, setRestoreBusy] = React.useState(false);
@@ -66,18 +66,14 @@ export function SetupScreen(_props: Props) {
     if (restoreBusy) return;
     setRestoreBusy(true);
     try {
-      const next = await replace(candidate);
-      setRestoreCandidate(undefined);
-      try {
-        await reconcileReminders(next);
-      } catch {
-        Alert.alert('Backup restored', 'Your records are restored. Local reminders could not be refreshed, but your loan tracking is intact.');
-        return;
-      }
-      Alert.alert('Backup restored', 'Your HandBack records are ready on this phone.');
+      const result = await restore(candidate);
+      Alert.alert('Backup restored', result.reminderError
+        ? 'Your records are restored. Local reminders could not be refreshed; use Retry in the reminder banner.'
+        : 'Your HandBack records are ready on this phone.');
     } catch (error) {
       Alert.alert('Restore failed', error instanceof Error ? error.message : 'The backup could not replace local data.');
     } finally {
+      setRestoreCandidate(undefined);
       setRestoreBusy(false);
     }
   }

@@ -287,3 +287,9 @@ test('every encoded QR is accepted by the parser and unsafe identifiers are reje
   const payload = parseLoanQR(encodeLoanQR(stateFor(), loanId));
   assertThrows(() => parseLoanQR(JSON.stringify({ ...payload, toolId: '__proto__' })));
 });
+
+test('completed loans cannot generate a new active QR copy', () => {
+  const state = stateFor();
+  state.loans[0].returnedOn = '2026-09-12';
+  assert.throws(() => encodeLoanQR(state, loanId), /returned/i);
+});

@@ -295,50 +295,53 @@ export function PersonPicker({
         <Text style={styles.selectChevron}>⌄</Text>
       </Pressable>
 
-      <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{label}</Text>
-              <Pressable onPress={() => setOpen(false)} accessibilityRole="button">
-                <Text style={styles.modalClose}>Close</Text>
-              </Pressable>
-            </View>
-            <ScrollView keyboardShouldPersistTaps="handled" style={styles.modalList}>
-              {visiblePeople.length === 0 ? <Text style={common.note}>No people yet.</Text> : null}
-              {visiblePeople.map((person) => (
-                <Pressable
-                  key={person.id}
-                  onPress={() => {
-                    onChange(person.id);
-                    setOpen(false);
-                  }}
-                  style={[styles.personOption, person.id === value && styles.personOptionSelected]}
-                >
-                  <View style={styles.personOptionMain}>
-                    <Text style={styles.personOptionName}>{person.name}</Text>
-                    {person.note ? <Text style={common.note}>{person.note}</Text> : null}
+      <Modal visible={open} animationType="slide" transparent onRequestClose={() => { if (!saving) { setOpen(false); setCreateOpen(false); } }}>
+        <KeyboardAvoidingView style={common.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={styles.modalBackdrop}>
+            <SafeAreaView edges={['bottom']} style={styles.modalCard}>
+              {createOpen ? (
+                <View>
+                  <Text style={styles.modalTitle}>Add a person</Text>
+                  <Text style={[common.note, styles.modalIntro]}>A name is required. The optional note helps distinguish people with the same name.</Text>
+                  <Field label="Name" value={name} onChangeText={setName} autoFocus placeholder="e.g. Chris" returnKeyType="next" />
+                  <Field label="Note (optional)" value={note} onChangeText={setNote} placeholder="e.g. next-door neighbor" />
+                  <Button label="Save person" onPress={() => void createPerson()} variant="primary" busy={saving} disabled={!name.trim()} />
+                  <Button label="Cancel" onPress={() => setCreateOpen(false)} variant="quiet" disabled={saving} />
+                </View>
+              ) : (
+                <>
+                  <View style={styles.modalHeader}>
+                    <Text style={styles.modalTitle}>{label}</Text>
+                    <Pressable onPress={() => setOpen(false)} accessibilityRole="button">
+                      <Text style={styles.modalClose}>Close</Text>
+                    </Pressable>
                   </View>
-                  {person.id === value ? <Text style={styles.check}>✓</Text> : null}
-                </Pressable>
-              ))}
-            </ScrollView>
-            {allowCreate ? <Button label="Add a new person" onPress={() => { setOpen(false); setCreateOpen(true); }} variant="secondary" /> : null}
-          </View>
-        </View>
-      </Modal>
+                  <ScrollView keyboardShouldPersistTaps="handled" style={styles.modalList}>
+                    {visiblePeople.length === 0 ? <Text style={common.note}>No people yet.</Text> : null}
+                    {visiblePeople.map((person) => (
+                      <Pressable
+                        key={person.id}
+                        onPress={() => {
+                          onChange(person.id);
+                          setOpen(false);
+                        }}
+                        style={[styles.personOption, person.id === value && styles.personOptionSelected]}
+                      >
+                        <View style={styles.personOptionMain}>
+                          <Text style={styles.personOptionName}>{person.name}</Text>
+                          {person.note ? <Text style={common.note}>{person.note}</Text> : null}
+                        </View>
+                        {person.id === value ? <Text style={styles.check}>✓</Text> : null}
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                  {allowCreate ? <Button label="Add a new person" onPress={() => setCreateOpen(true)} variant="secondary" /> : null}
 
-      <Modal visible={createOpen} animationType="fade" transparent onRequestClose={() => setCreateOpen(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Add a person</Text>
-            <Text style={[common.note, styles.modalIntro]}>A name is required. The optional note helps distinguish people with the same name.</Text>
-            <Field label="Name" value={name} onChangeText={setName} autoFocus placeholder="e.g. Chris" returnKeyType="next" />
-            <Field label="Note (optional)" value={note} onChangeText={setNote} placeholder="e.g. next-door neighbor" />
-            <Button label="Save person" onPress={() => void createPerson()} variant="primary" busy={saving} disabled={!name.trim()} />
-            <Button label="Cancel" onPress={() => setCreateOpen(false)} variant="quiet" disabled={saving} />
+                </>
+              )}
+            </SafeAreaView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );

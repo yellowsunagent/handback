@@ -24,6 +24,7 @@ export function AddToolScreen({ route, navigation }: Props) {
   const [saving, setSaving] = React.useState(false);
   const [photoBusy, setPhotoBusy] = React.useState(false);
   const lock = React.useRef(false);
+  const initializedFor = React.useRef<string | null>(null);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -33,12 +34,15 @@ export function AddToolScreen({ route, navigation }: Props) {
 
   React.useEffect(() => {
     if (!state) return;
+    const formKey = toolId ?? 'new';
+    if (initializedFor.current === formKey) return;
+    initializedFor.current = formKey;
     const tool = state.tools.find((item) => item.id === toolId);
     setName(tool?.name ?? '');
-    setOwnerId(tool?.ownerId ?? params.ownerId ?? state.profileId);
+    setOwnerId(tool?.ownerId ?? params.ownerId ?? (params.borrowed ? '' : state.profileId));
     setNotes(tool?.notes ?? '');
     setPhotoUri(tool?.photoUri);
-  }, [state, toolId, params.ownerId]);
+  }, [state, toolId, params.ownerId, params.borrowed]);
 
   if (!state) return null;
   const activeLoan = state.loans.find((loan) => loan.toolId === toolId && !loan.returnedOn);
@@ -60,6 +64,10 @@ export function AddToolScreen({ route, navigation }: Props) {
   async function onSave() {
     const cleaned = name.trim();
     if (!cleaned || !ownerId || lock.current) return;
+    if (params.borrowed && ownerId === state!.profileId) {
+      Alert.alert('Choose the owner', 'A borrowed tool must belong to someone else.');
+      return;
+    }
     lock.current = true;
     setSaving(true);
     try {
@@ -119,7 +127,7 @@ export function AddToolScreen({ route, navigation }: Props) {
       </View>
 
       <Field label="Tool name" value={name} onChangeText={setName} placeholder="e.g. 18V drill" autoFocus={!editing} maxLength={80} />
-      <PersonPicker label="Owner" people={state.people} value={ownerId} onChange={setOwnerId} placeholder="Choose the owner" />
+      <PersonPicker label="Owner" excludeIds={params.borrowed ? [state.profileId] : []} people={state.people} value={ownerId} onChange={setOwnerId} placeholder="Choose the owner" />
       <Field label="Notes (optional)" value={notes} onChangeText={setNotes} placeholder="Brand, model, battery and charger details" multiline maxLength={500} />
 
       <Button label={editing ? 'Save changes' : 'Save tool'} onPress={() => void onSave()} variant="primary" busy={saving} disabled={!name.trim() || !ownerId} />

@@ -102,7 +102,7 @@ function ReminderLifecycle() {
 }
 
 function AppNavigator() {
-  const { state, loading, error, refresh, replace } = useApp();
+  const { state, loading, error, refresh, restore } = useApp();
   const [retrying, setRetrying] = React.useState(false);
   const [restoring, setRestoring] = React.useState(false);
 
@@ -122,22 +122,13 @@ function AppNavigator() {
         await discardBackup(candidate);
         return;
       }
-      let replaced = false;
       try {
-        const next = await replace(candidate);
-        replaced = true;
-        try {
-          await reconcileReminders(next);
-        } catch {
-          Alert.alert('Data restored', 'Your records were restored. Local reminders could not be refreshed; you can still track every loan in the app.');
-        }
+        const result = await restore(candidate);
+        Alert.alert('Data restored', result.reminderError
+          ? 'Your records were restored. Local reminders could not be refreshed; use Retry in the reminder banner.'
+          : 'Your HandBack records are now restored on this phone.');
       } catch (caught) {
-        await discardBackup(candidate);
         Alert.alert('Restore failed', caught instanceof Error ? caught.message : 'Your unreadable local records were preserved.');
-      } finally {
-        // discardBackup checks current committed references, so this is safe
-        // after a successful replacement and removes only abandoned staging.
-        if (replaced) await discardBackup(candidate);
       }
     } catch (caught) {
       Alert.alert('Could not read backup', caught instanceof Error ? caught.message : 'The backup was rejected. Existing data was left untouched.');

@@ -76,7 +76,6 @@ function LoanRow({ row, profileId, people, onPress, history = false }: { row: Ro
         <Text style={common.rowSub}>{isLender ? `With ${other}` : `From ${other}`}</Text>
         <View style={styles.rowMeta}><StatusPill label={history ? 'Returned' : overdue ? 'Overdue' : loan.dueOn ? 'Outstanding' : 'No due date'} tone={history ? 'muted' : overdue ? 'danger' : loan.dueOn ? 'warning' : 'muted'} /><Text style={styles.role}>{isLender ? 'Lent' : 'Borrowed'}</Text></View>
         <Text style={styles.dueText}>{loan.dueOn ? `${due} (${loan.dueOn})` : 'No due date'}</Text>
-        <Text style={styles.dueText}>{loan.dueOn ? `${due} (${loan.dueOn})` : 'No due date'}</Text>
       </View>
       <Text style={styles.chevron}>›</Text>
     </Pressable>

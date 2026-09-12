@@ -22,6 +22,7 @@ export function EditLoanScreen({ route, navigation }: Props) {
   const [saving, setSaving] = React.useState(false);
   const [dateError, setDateError] = React.useState<string>();
   const lock = React.useRef(false);
+  const initializedFor = React.useRef<string | null>(null);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -31,7 +32,8 @@ export function EditLoanScreen({ route, navigation }: Props) {
 
   const loan = state?.loans.find((item) => item.id === loanId);
   React.useEffect(() => {
-    if (!loan) return;
+    if (!loan || initializedFor.current === loan.id) return;
+    initializedFor.current = loan.id;
     setBorrowerId(loan.borrowerId);
     setStartedOn(loan.startedOn);
     setDueOn(loan.dueOn ?? '');
@@ -88,7 +90,7 @@ export function EditLoanScreen({ route, navigation }: Props) {
 
   return (
     <KeyboardScreen>
-      <Header title="Edit loan" subtitle="Correct this local record without changing the tool’s identity." onBack={() => navigation.goBack()} />
+      <Header title="Edit loan" subtitle="Changes apply only on this phone." onBack={() => navigation.goBack()} />
       <Card style={styles.summary}>
         <Text style={styles.toolName}>{tool?.name ?? 'Unknown tool'}</Text>
         <Text style={common.note}>Owner: {owner?.name ?? 'Archived person'}</Text>

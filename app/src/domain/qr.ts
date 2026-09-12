@@ -85,6 +85,7 @@ export function encodeLoanQR(state: AppState, loanId: string): string {
   const checked = validateState(state);
   const loan = checked.loans.find((candidate) => candidate.id === loanId);
   if (!loan) throw new Error('Loan not found');
+  if (loan.returnedOn) throw new Error('Returned loans cannot be shared as new copies');
   if (loan.ownerId !== checked.profileId) throw new Error('Only the tool owner can share this loan');
 
   const tool = checked.tools.find((candidate) => candidate.id === loan.toolId);

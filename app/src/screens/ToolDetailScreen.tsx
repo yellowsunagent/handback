@@ -55,7 +55,7 @@ export function ToolDetailScreen({ route, navigation }: Props) {
         <View style={styles.heroCopy}>
           <Text style={styles.kicker}>OWNER</Text>
           <Text style={styles.owner}>{ownerName}</Text>
-          <StatusPill label={activeLoan ? (isMine ? 'Lent out' : 'Borrowed by me') : isMine ? 'Available for me to lend' : 'Available to borrow'} tone={activeLoan ? 'warning' : 'good'} />
+          <StatusPill label={activeLoan ? (isMine ? 'Lent out' : 'Borrowed by me') : isMine ? 'Available for me to lend' : 'No active loan on this phone'} tone={activeLoan ? 'warning' : 'good'} />
         </View>
       </View>
 

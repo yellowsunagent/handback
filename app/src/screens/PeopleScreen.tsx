@@ -1,5 +1,6 @@
 import React from 'react';
-import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import type { Person } from '../types/models';
@@ -71,7 +72,7 @@ export function PeopleScreen({ navigation }: Props) {
 
   return (
     <Screen>
-      <Header title="People" subtitle="Names stay as separate local identities, even when they match." onBack={() => navigation.goBack()} action={<Button label="+ Add" onPress={() => setEditor('new')} variant="secondary" style={styles.addButton} />} />
+      <Header title="People" subtitle="Keep people handy and use notes to distinguish friends with the same name." onBack={() => navigation.goBack()} action={<Button label="+ Add" onPress={() => setEditor('new')} variant="secondary" style={styles.addButton} />} />
 
       <Card style={styles.profileCard}>
         <Text style={styles.cardKicker}>THIS PHONE</Text>
@@ -126,16 +127,16 @@ function PersonEditor({ person, saving, onClose, onSave }: { person: Person | 'n
   }, [person]);
   return (
     <Modal visible={!!person} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.modalBackdrop}>
-        <View style={styles.modalCard}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalBackdrop}>
+        <SafeAreaView edges={['bottom']} style={styles.modalCard}>
           <Text style={styles.modalTitle}>{person === 'new' ? 'Add a person' : 'Edit person'}</Text>
           <Text style={[common.note, styles.modalIntro]}>The note is private to this phone and helps distinguish people with the same name.</Text>
           <Field label="Name" value={name} onChangeText={setName} autoFocus placeholder="e.g. Chris" maxLength={40} />
           <Field label="Distinguishing note (optional)" value={note} onChangeText={setNote} placeholder="e.g. next-door neighbor" maxLength={80} />
           <Button label="Save" onPress={() => void onSave(name, note)} variant="primary" busy={saving} disabled={!name.trim()} />
           <Button label="Cancel" onPress={onClose} variant="quiet" disabled={saving} />
-        </View>
-      </View>
+        </SafeAreaView>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

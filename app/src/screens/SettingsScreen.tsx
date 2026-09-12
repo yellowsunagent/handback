@@ -4,7 +4,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import type { AppState } from '../types/models';
 import type { RootStackParamList } from '../types/nav';
-import { discardBackup, exportBackup, pickBackup, reconcileReminders } from '../services/native';
+import { discardBackup, exportBackup, pickBackup } from '../services/native';
 import { useApp } from '../ui/AppContext';
 import { Button, Card, Field, Header, KeyboardScreen } from '../ui/components';
 import { colors, common } from '../ui/theme';
@@ -16,7 +16,7 @@ function counts(state: AppState) {
 }
 
 export function SettingsScreen({ navigation }: Props) {
-  const { state, refresh, commit, replace } = useApp();
+  const { state, refresh, commit, restore } = useApp();
   const [name, setName] = React.useState('');
   const [savingName, setSavingName] = React.useState(false);
   const [backupBusy, setBackupBusy] = React.useState(false);
@@ -99,18 +99,14 @@ export function SettingsScreen({ navigation }: Props) {
     lock.current = true;
     setBackupBusy(true);
     try {
-      const next = await replace(candidate);
-      setRestoreCandidate(undefined);
-      try {
-        await reconcileReminders(next);
-      } catch {
-        Alert.alert('Data restored', 'Your records were restored. Local reminders could not be refreshed; you can still track every loan in the app.');
-        return;
-      }
-      Alert.alert('Data restored', 'Your HandBack records are now restored on this phone.');
+      const result = await restore(candidate);
+      Alert.alert('Data restored', result.reminderError
+        ? 'Your records were restored. Local reminders could not be refreshed; use Retry in the reminder banner.'
+        : 'Your HandBack records are now restored on this phone.');
     } catch (error) {
       Alert.alert('Restore failed', error instanceof Error ? error.message : 'Your current records were preserved.');
     } finally {
+      setRestoreCandidate(undefined);
       lock.current = false;
       setBackupBusy(false);
     }

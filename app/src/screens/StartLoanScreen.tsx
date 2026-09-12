@@ -135,7 +135,7 @@ export function StartLoanScreen({ route, navigation }: Props) {
         <Text style={styles.chevron}>⌄</Text>
       </Pressable>
       {availableTools.length === 0 ? <Text style={styles.warningText}>{mode === 'lend' ? 'You have no available owned tools yet.' : 'Add a borrowed tool to your inventory first.'}</Text> : null}
-      <Button label="Add a new tool" onPress={() => navigation.navigate('AddTool', { ownerId: mode === 'borrow' ? currentState.people.find((person) => person.id !== currentState.profileId && !person.archived)?.id : currentState.profileId })} variant="quiet" style={styles.addToolButton} />
+      <Button label="Add a new tool" onPress={() => navigation.navigate('AddTool', { borrowed: mode === 'borrow', ownerId: mode === 'lend' ? currentState.profileId : undefined })} variant="quiet" style={styles.addToolButton} />
 
       {selectedTool ? (
         <Card style={styles.formCard}>

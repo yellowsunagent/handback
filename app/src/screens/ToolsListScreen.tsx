@@ -12,7 +12,6 @@ type Props = NativeStackScreenProps<RootStackParamList, 'ToolsList'>;
 
 export function ToolsListScreen({ navigation }: Props) {
   const { state, refresh } = useApp();
-  const [search, setSearch] = React.useState('');
   const [showArchived, setShowArchived] = React.useState(false);
 
   useFocusEffect(
@@ -24,10 +23,8 @@ export function ToolsListScreen({ navigation }: Props) {
   if (!state) return null;
   const activeLoans = new Map(state.loans.filter((loan) => !loan.returnedOn).map((loan) => [loan.toolId, loan] as const));
   const people = new Map(state.people.map((person) => [person.id, person] as const));
-  const query = search.trim().toLocaleLowerCase();
-  const matches = (tool: Tool) => !query || `${tool.name} ${tool.notes ?? ''}`.toLocaleLowerCase().includes(query);
-  const currentTools = state.tools.filter((tool) => !tool.archived && matches(tool));
-  const archivedTools = state.tools.filter((tool) => tool.archived && matches(tool));
+  const currentTools = state.tools.filter((tool) => !tool.archived);
+  const archivedTools = state.tools.filter((tool) => tool.archived);
   const profile = people.get(state.profileId);
 
   return (
@@ -58,7 +55,7 @@ export function ToolsListScreen({ navigation }: Props) {
       </View>
 
       <View style={styles.sectionHeader}>
-        <Text style={common.sectionTitle}>My tools</Text>
+        <Text style={common.sectionTitle}>Tool inventory</Text>
         <Pressable accessibilityRole="button" onPress={() => navigation.navigate('AddTool')}>
           <Text style={styles.link}>+ Add tool</Text>
         </Pressable>
@@ -66,9 +63,9 @@ export function ToolsListScreen({ navigation }: Props) {
 
       {currentTools.length === 0 ? (
         <EmptyState
-          title={query ? 'No matching tools' : 'Your inventory is ready when you are'}
-          body={query ? 'Try another search.' : 'Add the tools you own, or record a tool you borrowed from a friend.'}
-          action={!query ? <Button label="Add a tool" onPress={() => navigation.navigate('AddTool')} variant="secondary" /> : undefined}
+          title="Your inventory is ready when you are"
+          body="Add the tools you own, or record a tool you borrowed from a friend."
+          action={<Button label="Add a tool" onPress={() => navigation.navigate('AddTool')} variant="secondary" />}
         />
       ) : (
         currentTools.map((tool) => (
@@ -129,7 +126,7 @@ function ToolRow({
   archived?: boolean;
 }) {
   const isMine = tool.ownerId === profileId;
-  let status = isMine ? 'Available for me to lend' : `Available to borrow from ${people.get(tool.ownerId)?.name ?? 'an archived person'}`;
+  let status = isMine ? 'Available for me to lend' : 'No active loan on this phone';
   let tone: 'muted' | 'good' | 'warning' = 'good';
   if (loan) {
     const otherId = isMine ? loan.borrowerId : loan.ownerId;

@@ -10,7 +10,7 @@ Spec: PRD.md. Review baseline: 87aa583859f0184282a3710f06552bf77606ef4d.
 
 Test boundaries are those specified by PRD section 10: identity and loan transitions through public domain/store operations; QR parsing/import; calendar-day and reminder scheduling; backup validation/export/restore. Use Node's built-in test runner and the existing TypeScript compiler, without adding a test framework.
 
-Native dependencies await owner approval. Physical iPhone checks, distribution and the real-data pilot are not implied by successful automated checks. Preserve unrelated untracked AGENTS.md and .DS_Store.
+The owner approved the native dependencies listed below. Physical iPhone checks, distribution and the real-data pilot are not implied by successful automated checks. Preserve unrelated untracked AGENTS.md and .DS_Store.
 
 ## Native implementation decisions
 
@@ -31,3 +31,30 @@ Native dependencies await owner approval. Physical iPhone checks, distribution a
 
 - Native app identifier: `com.jasoncjordan.handback`, configured locally only; no Apple identifier registration or signing changes have been made.
 - Portable backup schema: `{version: 1, kind: "handback-backup", state: <v2 state>, assets: {<tool ID>: {base64, mimeType}}}`. In the backup, tool photos use `asset:<tool ID>`; staged local photos use generated app-relative filenames. Limits: 10 MiB per photo, 50 MiB total photos, 100 MiB JSON. New photo selections enforce the total export budget.
+
+## Acceptance coverage
+
+| PRD area | Implementation boundary | Remaining native verification |
+| --- | --- | --- |
+| FR-01–FR-04 | Stable profile/people/tool IDs; domain commands; serialized repository; manual forms, active/history screens, corrections and archive/return/undo/delete | Real-device restart, same-name comprehension, return conflicts and updates |
+| FR-05 | Strict v2 QR codec and atomic import; owner sharing and borrower review | Two-iPhone scanning, denied camera access, repeat scans after local edits/returns |
+| FR-06–FR-07 | Calendar-day helpers, desired reminder plan, queued notification reconciliation, native share sheet | Permission paths, local 9 a.m. delivery/time-zone changes, share cancellation |
+| FR-08 | Self-contained JSON backup, asset validation/staging, single replacement after confirmation, reminder reconciliation | Files export/restore with real photos, cancellation, invalid file and interrupted write paths |
+
+Expo's offline compatibility check flags the baseline AsyncStorage 3.0.2 against SDK 54's recommended 2.2.0. The existing major version was retained; no storage downgrade was authorized. Verify the native development build before selecting any dependency migration. This is one reason the README does not promise Expo Go compatibility.
+
+The implementation covers the source work for M1–M3. Those milestones are not signed off for real data until physical-device checks pass. M4's 30-day pilot and M5 public-release preparation have not been performed.
+
+## Verification and review
+
+- Final automated suite: 28 tests passed across domain/persistence, QR/backup/calendar dates, notification scheduling and restore orchestration.
+- TypeScript (`npm run typecheck`), native entitlement assertions (`npm run check:config`) and `git diff --check` passed.
+- iOS production Hermes export succeeded with 1,317 modules. This validates bundling, not a signed native app or device behavior.
+- Calendar/migration and transfer tests also passed under Pacific/Kiritimati and America/Los_Angeles. Legacy timestamps are interpreted as local calendar dates; raw legacy data is retained.
+- Independent standards review identified read-error handling, duplicate due-date text and repeated restore orchestration. All three were fixed and the reviewer confirmed resolution. Restore tests distinguish successful data replacement from notification failure and preserve previous records after write failure.
+- Additional review fixes preserve form drafts when creating people, use one people-picker modal with keyboard avoidance, explain ownership conflicts when undoing a return, and avoid implying remote availability for other people's tools.
+- Implementation is committed locally on `main`; no push, publication, device provisioning or pilot invitation was performed. The unrelated root `AGENTS.md` remains untracked.
+
+Independent spec review found three source issues: completed loans could generate active QR copies, new borrowed tools could default to the local owner, and repeated legacy names could merge unrelated people. Completed-loan QR encoding now rejects and the sharing action is hidden; the borrowed-tool form requires an explicitly selected other owner; and migration rejects repeated independent nonlocal names while retaining the original data. QR and legacy migration regression tests were observed failing before their fixes and passing afterward. The conservative migration can require manual recovery even when repeated names happen to represent one person, because v1 has no evidence to distinguish that case.
+
+Review closeout: standards 3 findings resolved; spec 3 findings resolved. Each reviewer rechecked the corresponding fixes and reported no residual source issue in those changes. Device and release gates above remain open.
