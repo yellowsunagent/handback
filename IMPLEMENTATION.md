@@ -53,8 +53,10 @@ The implementation covers the source work for M1–M3. Those milestones are not 
 - Calendar/migration and transfer tests also passed under Pacific/Kiritimati and America/Los_Angeles. Legacy timestamps are interpreted as local calendar dates; raw legacy data is retained.
 - Independent standards review identified read-error handling, duplicate due-date text and repeated restore orchestration. All three were fixed and the reviewer confirmed resolution. Restore tests distinguish successful data replacement from notification failure and preserve previous records after write failure.
 - Additional review fixes preserve form drafts when creating people, use one people-picker modal with keyboard avoidance, explain ownership conflicts when undoing a return, and avoid implying remote availability for other people's tools.
-- Implementation is committed locally on `main`; no push, publication, device provisioning or pilot invitation was performed. The unrelated root `AGENTS.md` remains untracked.
+- Implementation is committed locally on `main`; no push, publication, device provisioning or pilot invitation was performed. At implementation closeout, the unrelated root `AGENTS.md` was still untracked.
 
 Independent spec review found three source issues: completed loans could generate active QR copies, new borrowed tools could default to the local owner, and repeated legacy names could merge unrelated people. Completed-loan QR encoding now rejects and the sharing action is hidden; the borrowed-tool form requires an explicitly selected other owner; and migration rejects repeated independent nonlocal names while retaining the original data. QR and legacy migration regression tests were observed failing before their fixes and passing afterward. The conservative migration can require manual recovery even when repeated names happen to represent one person, because v1 has no evidence to distinguish that case.
 
 Review closeout: standards 3 findings resolved; spec 3 findings resolved. Each reviewer rechecked the corresponding fixes and reported no residual source issue in those changes. Device and release gates above remain open.
+
+2026-10-05 skills setup: Commit `4c62ff3` added root `AGENTS.md` to version control and created the engineering skills configuration under `docs/agents/`.
